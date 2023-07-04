@@ -34,19 +34,24 @@ def get_df_info(df: pd.DataFrame) -> pd.DataFrame:
     Examples:
         >>> df = pd.DataFrame({'cat_col': ['A', 'B', np.nan], 'num_col': [4, -1.4, 2.22]})
         >>> print(get_df_info(df)) # doctest: +ELLIPSIS
-            column              column_type  ...  unique_percent      unique_values
-        0  cat_col            <class 'str'>  ...       66.666667        [A, B, nan]
-        1  num_col  <class 'numpy.float64'>  ...      100.000000  [4.0, -1.4, 2.22]
+            column              column_type  ...  max_value      unique_values
+        0  cat_col            <class 'str'>  ...        NaN        [A, B, nan]
+        1  num_col  <class 'numpy.float64'>  ...        4.0  [4.0, -1.4, 2.22]
         <BLANKLINE>
-        [2 rows x 7 columns]
+        [2 rows x 9 columns]
 """
     columns = list(df.columns)
-    column_types = [type(cell) for cell in df.iloc[np.random.randint(1, len(df)-1), :]]
-    null_count = [df[col].isna().sum() for col in df.columns]
-    null_percent = [(df[col].isna().sum()/df.shape[0])*100 for col in df.columns]
-    unique_count = [df[col].nunique() for col in df.columns]
-    unique_percent = [(df[col].nunique()/df.shape[0])*100 for col in df.columns]
-    unique = [df[col].unique() for col in df.columns]
+    column_types = [type(cell) for cell in df.iloc[np.random.randint(len(df)-1), :]]
+
+    null_count = [df[col].isna().sum() for col in columns]
+    null_percent = [(count/df.shape[0])*100 for count in null_count]
+
+    unique = [df[col].unique() for col in columns]
+    unique_count = [df[col].nunique() for col in columns]
+    unique_percent = [(count/df.shape[0])*100 for count in unique_count]
+
+    min_value = [df[col].min() if df[col].dtype not in ['O', str] else None for col in columns]
+    max_value = [df[col].max() if df[col].dtype not in ['O', str] else None for col in columns]
 
     return pd.DataFrame(
         {
@@ -56,6 +61,8 @@ def get_df_info(df: pd.DataFrame) -> pd.DataFrame:
             'null_percent': null_percent,
             'unique_count': unique_count,
             'unique_percent': unique_percent,
+            'min_value': min_value,
+            'max_value': max_value,
             'unique_values': unique
         }
     )
@@ -66,6 +73,7 @@ def get_df_info(df: pd.DataFrame) -> pd.DataFrame:
 def common_elements(*elements) -> list:
     """
     Helper Function to get common elements between two or more sequences.
+    Used by dataframe_common_columns()
 
     Args:
         *elements: Sequence type
@@ -92,6 +100,8 @@ def dataframe_common_columns(
 ) -> pd.DataFrame:
     """
     Function to extract common dataframe COLUMN NAMES between 2 or more dataframes.
+    Only adds value to the output dataframe if there exists common columns by name
+    bw 2 or more dataframes.
 
     Args:
         df_dictionary : dict
@@ -112,13 +122,12 @@ def dataframe_common_columns(
 
     Examples:
         >>> df1 = pd.DataFrame(data=[[1, 2], [3, 4]], columns=['a', 'b'])
-        >>> df2 = pd.DataFrame(data=[[1, 4], [0, 7]], columns=['l', 'z'])
-        >>> df3 = pd.DataFrame(data=[[-1, 1, 8], [0, 4, 3], [0, 0, 4]], columns=['z', 'b', 'l'])
+        >>> df2 = pd.DataFrame(data=[[1, 4], [0, 7]], columns=['c', 'd'])
+        >>> df3 = pd.DataFrame(data=[[-1, 1, 8], [0, 4, 3], [0, 0, 4]], columns=['d', 'b', 'c'])
         >>> print(dataframe_common_columns({'df1_name': df1, 'df2_name': df2, 'df3_name': df3}))
                            0     1
         df1_name df3_name  b  None
-        df2_name df3_name  z     l
-
+        df2_name df3_name  d     c
     """
 
     # To store the connections result
@@ -127,7 +136,7 @@ def dataframe_common_columns(
         # Using the helper function to get the common column names
         common_cols = common_elements(
             *[df_dictionary[comb_of_df_names[i]].columns for i in range(comb_size)]
-            )
+        )
 
         # If the user passes a list of possible keys, check only within those
         if possible_keys:
@@ -259,7 +268,9 @@ def get_sign_info_as_percent(df: pd.DataFrame, *features, print_signed_pcts_col:
             Final dataframe with new columns containing the signs(+ve, -ve or 0) of the feature set.
 
     Examples:
-        >>> df = pd.DataFrame(data=[[2, -1, 4], [0, 0, -2], [0, -10, 4], [11, 0, 41], [17, 1, 4]], columns=['a', 'b', 'c'])
+        >>> df = pd.DataFrame(\
+            data=[[2, -1, 4], [0, 0, -2], [0, -10, 4], [11, 0, 41], [17, 1, 4]], columns=['a', 'b', 'c']\
+            )
         >>> print(get_sign_info_as_percent(df, 'a', 'b', print_signed_pcts_col=True))
         1    60.0
         0    40.0
@@ -290,12 +301,13 @@ def get_sign_info_as_percent(df: pd.DataFrame, *features, print_signed_pcts_col:
 
 
 def find_const_and_null_cols(
-        df: pd.DataFrame,
-        verbose: int = 1,
-        ignore_cols: list = None
+    df: pd.DataFrame,
+    verbose: int = 1,
+    ignore_cols: list = None
 ) -> pd.DataFrame:
     """
-    Function to drop columns with all constant or all null values.
+    Function to get the list of columns in a dataframe that have
+    ALL constant or ALL null values.
 
     Args:
         df: pd.DataFrame
@@ -310,7 +322,11 @@ def find_const_and_null_cols(
             List of all columns with either constant values or all null values.
 
     Examples:
-        >>> df_dict = {'col1': [1, 1, 1, 1, 1], 'col2': [np.nan, np.nan, np.nan, np.nan, np.nan], 'col3': [1, np.nan, 1, np.nan, 1]}
+        >>> df_dict = {\
+            'col1': [1, 1, 1, 1, 1],\
+            'col2': [np.nan, np.nan, np.nan, np.nan, np.nan],\
+            'col3': [1, np.nan, 1, np.nan, 1]\
+            }
         >>> df = pd.DataFrame(df_dict)
         >>> print(find_const_and_null_cols(df))
         Constant columns: ['col1', 'col3']
@@ -319,9 +335,10 @@ def find_const_and_null_cols(
         <BLANKLINE>
         ['col1', 'col3', 'col2']
     """
-    df_output = df.copy()
-    cols_const = list(df_output.columns[df_output.nunique() == 1])
-    cols_all_null = list(df_output.columns[df_output.nunique() == 0])
+    df_nuniq = df.nunique()
+
+    cols_const = list(df.columns[df_nuniq == 1])
+    cols_all_null = list(df.columns[df_nuniq == 0])
 
     if ignore_cols:
         cols_const = [col for col in cols_const if col not in ignore_cols]
@@ -337,15 +354,15 @@ def find_const_and_null_cols(
 
 
 def synthetic_data_generate(
-        distribution: str,
-        start_param: float,
-        end_param: float = None,
-        seed: int = 23,
-        no_samples: int = 2500,
-        plot_data: bool = True,
-        color: str = 'cyan',
-        bins: int = 50,
-        figsize=(10, 8)
+    distribution: str,
+    param1: float,
+    param2: float = None,
+    seed: int = 23,
+    no_samples: int = 2500,
+    plot_data: bool = True,
+    color: str = 'cyan',
+    bins: int = 50,
+    figsize: tuple[int, int] = (10, 8)
 ) -> np.array:
     """
     Function to generate synthetic data for 'normal', 'uniform', 'exponential', 'lognormal',
@@ -354,9 +371,9 @@ def synthetic_data_generate(
     Args:
         distribution : str
             The distribution for which the synthetic data is to be created.
-        start_param : float
+        param1 : float
             First parameter of the distribution. Conforms to np.random.'distribution'.
-        end_param : float
+        param2 : float
             Second parameter of the distribution. Conforms to np.random.'distribution'.
         seed : int, optional
             Seed for data generation. The default is 23.
@@ -373,7 +390,7 @@ def synthetic_data_generate(
 
     Raises:
         NameError: If the distribution string passed doesn't match the
-        allowed distribution strings.
+        allowed distribution name strings.
 
     Returns:
         synthetic_data_dist : np.array
@@ -400,26 +417,26 @@ def synthetic_data_generate(
 
     allowed_dists = ['normal', 'uniform', 'exponential', 'lognormal', 'chisquare', 'beta']
 
-    if distribution in allowed_dists:
-        np.random.seed(seed=seed)
-        if end_param:
-            evaluation_string = f'np.random.{distribution}({start_param}, {end_param}, {no_samples})'
-        else:
-            evaluation_string = f'np.random.{distribution}({start_param}, {no_samples})'
+    if distribution not in allowed_dists:
+        raise NameError(
+            f"{distribution} doesn't match any of the allowed distributions {allowed_dists}."
+            )
 
-        print(f"Evaluating: {evaluation_string}")
-        synthetic_data_dist = eval(evaluation_string)
-        if plot_data:
-            _, ax = plt.subplots(figsize=figsize)
-            ax.hist(synthetic_data_dist, bins=bins, color=color)
-            plt.title(f"Synthetic {distribution} distribution")
-            plt.show()
+    np.random.seed(seed=seed)
+    if param2:
+        evaluation_string = f'np.random.{distribution}({param1}, {param2}, {no_samples})'
+    else:
+        evaluation_string = f'np.random.{distribution}({param1}, {no_samples})'
 
-        return synthetic_data_dist
+    print(f"Evaluating: {evaluation_string}")
+    synthetic_data_dist = eval(evaluation_string)
+    if plot_data:
+        _, ax = plt.subplots(figsize=figsize)
+        ax.hist(synthetic_data_dist, bins=bins, color=color)
+        plt.title(f"Synthetic {distribution} distribution")
+        plt.show()
 
-    raise NameError(
-        f"{distribution} doesn't match any of the allowed distributions {allowed_dists}."
-        )
+    return synthetic_data_dist
 
 ##############################
 

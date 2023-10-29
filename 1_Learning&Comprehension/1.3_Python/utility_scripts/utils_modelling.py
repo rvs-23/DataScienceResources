@@ -716,6 +716,94 @@ def roc_auc_w_cv(
     )
     ax.legend(loc="lower right")
     plt.show()
+    
+    
+def synthetic_data_generate(
+    distribution: str,
+    param1: float,
+    param2: float = None,
+    seed: int = 23,
+    no_samples: int = 2500,
+    plot_data: bool = True,
+    color: str = 'cyan',
+    bins: int = 50,
+    figsize: tuple[int, int] = (10, 8)
+) -> np.array:
+    """
+    Function to generate synthetic data for 'normal', 'uniform', 'exponential', 'lognormal',
+    'chisquare' and 'beta' distributions.
+
+    Args:
+        distribution : str
+            The distribution for which the synthetic data is to be created.
+        param1 : float
+            First parameter of the distribution. Conforms to np.random.'distribution'.
+        param2 : float
+            Second parameter of the distribution. Conforms to np.random.'distribution'.
+        seed : int, optional
+            Seed for data generation. The default is 23.
+        no_samples : int, optional
+            Number of samples that need to be generated. The default is 2500.
+        plot_data : bool, optional
+            Flat to plot the generated data. The default is True.
+        color : str, optional
+            Color to be used in the plot. The default is 'cyan'.
+        bins : int, optional
+            Number of bins in the histogram. The default is 50.
+        figsize : TYPE, optional
+            The size of the figure. The default is (10, 8).
+
+    Raises:
+        NameError: If the distribution string passed doesn't match the
+        allowed distribution name strings.
+
+    Returns:
+        synthetic_data_dist : np.array
+            Synthetic data that belongs to the passed distribution.
+
+    Examples:
+        >>> print(synthetic_data_generate('beta', 0.1 ,0.7, no_samples=25))
+        Evaluating: np.random.beta(0.1, 0.7, 25)
+        [1.48106312e-03 2.95996514e-01 4.76909262e-07 6.47296485e-08
+         2.80635484e-02 9.87265825e-27 6.21458267e-01 5.20839780e-03
+         9.02038101e-01 2.93009394e-05 2.16573885e-01 1.29939222e-05
+         9.00048607e-01 8.05760306e-04 4.53939206e-01 1.97057215e-01
+         1.21454052e-09 5.22063615e-08 3.20164980e-01 2.94227502e-08
+         7.13676027e-03 3.27952428e-02 2.47818967e-07 4.10903462e-03
+         7.37451142e-04]
+
+        >>> print(synthetic_data_generate('exponential', 1, no_samples=15))
+        Evaluating: np.random.exponential(1, 15)
+        [7.28355552e-01 2.93675803e+00 1.45012810e+00 3.31837177e-01
+         2.49802467e-01 1.15906982e+00 1.82888761e-01 4.98308403e-01
+         9.62471714e-01 5.30909452e-01 2.46792402e-03 2.15444256e+00
+         2.16236707e+00 3.57260386e-01 8.90578798e-01]
+    """
+
+    allowed_dists = ['normal', 'uniform', 'exponential', 'lognormal', 'chisquare', 'beta']
+
+    if distribution not in allowed_dists:
+        raise NameError(
+            f"{distribution} doesn't match any of the allowed distributions {allowed_dists}."
+            )
+
+    np.random.seed(seed=seed)
+    if param2:
+        evaluation_string = f'np.random.{distribution}({param1}, {param2}, {no_samples})'
+    else:
+        evaluation_string = f'np.random.{distribution}({param1}, {no_samples})'
+
+    print(f"Evaluating: {evaluation_string}")
+    synthetic_data_dist = eval(evaluation_string)
+    if plot_data:
+        _, ax = plt.subplots(figsize=figsize)
+        ax.hist(synthetic_data_dist, bins=bins, color=color)
+        plt.title(f"Synthetic {distribution} distribution")
+        plt.show()
+
+    return synthetic_data_dist
+
+##############################
 
 ######################################
 
